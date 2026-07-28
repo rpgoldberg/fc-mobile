@@ -69,30 +69,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run npm audit
-        run: |
-          npm audit --audit-level=moderate --omit=dev
-          echo "## NPM Audit Results" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          npm audit --omit=dev 2>&1 | head -50 >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
-        continue-on-error: true
+      # The gate decides pass/fail from the audit report, never from npm's exit
+      # code (npm audit exits non-zero on findings of ANY severity). Its own
+      # tests run first so a broken gate cannot quietly wave findings through.
+      - name: Verify audit gate logic
+        run: bash .github/scripts/npm-audit-gate.test.sh
 
-      - name: Check for critical vulnerabilities
-        run: |
-          audit_output=$(npm audit --json --omit=dev)
-          critical_count=$(echo "$audit_output" | jq '.metadata.vulnerabilities.critical // 0')
-          high_count=$(echo "$audit_output" | jq '.metadata.vulnerabilities.high // 0')
-
-          if [ "$critical_count" -gt 0 ]; then
-            echo "Found $critical_count critical vulnerabilities"
-            exit 1
-          elif [ "$high_count" -gt 0 ]; then
-            echo "Found $high_count high vulnerabilities"
-          else
-            echo "No critical or high vulnerabilities found"
-          fi
+      - name: Enforce dependency vulnerability policy
+        run: bash .github/scripts/npm-audit-gate.sh

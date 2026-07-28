@@ -12,6 +12,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
   },
+  "overrides": {
+    "axios": "^1.18.1"
+  },
   "dependencies": {
     "@figurecollecting/fc-shared": "^1.4.0",
     "@preact/signals": "^2.8.2",
