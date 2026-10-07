@@ -213,6 +213,11 @@ The legacy `/login` redirect, which no deployed backend serves, is an explicit
 opt-out: `--build-arg VITE_AUTH_MODE=legacy`. Any other value fails the build.
 `npm run dev` and `npm run build` stay legacy unless `VITE_AUTH_MODE=oidc` is set.
 
+`HOLDING=1` (container env, default `0`) serves `deploy/nginx/holding.html` for
+every navigation except under `/api`; `/api` stays 404 and a non-navigation
+fetch of an unknown path stays 404. Any other value stops the container.
+`deploy/nginx/40-fc-holding.sh` writes the rewrite to `/tmp/fc-mode` at start.
+
 `vite preview` sends the same headers, so the e2e suite runs under the CSP and
 fails on any `securitypolicyviolation`. Component CSS therefore goes through
 `<Style css={...} />` (constructed stylesheets), never a `<style>` element or
