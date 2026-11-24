@@ -78,6 +78,8 @@ test('the watch counts a call to /api at the apex and answers it 401', async ({ 
   const status = await page.evaluate(async () => (await fetch('/api/push/vapid-key')).status);
   expect(status).toBe(401);
   expect(watch.api).toEqual(['GET /api/push/vapid-key']);
+  // the page's image requests still in flight answer through the test's request context, which goes with the test
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 test('a full session in fixture mode at the apex sends nothing to /api and never goes to /login', async ({ context, page, request }) => {
