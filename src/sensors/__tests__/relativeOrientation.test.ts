@@ -306,6 +306,54 @@ describe('probeTilt: shown as available only after a first real sample within 1 
     vi.stubGlobal('DeviceOrientationEvent', undefined);
     await expect(probeTilt()).resolves.toBe('none');
   });
+
+  it('aborted while the sensor waits for its first sample: the sensor is stopped, no timer is left, no event stage opens', async () => {
+    withSensor();
+    vi.useFakeTimers();
+    const add = vi.spyOn(window, 'addEventListener');
+    const abort = new AbortController();
+    const p = probeTilt(TILT.firstSampleMs, abort.signal);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(FakeSensor.made).toHaveLength(1);
+    abort.abort();
+    await expect(p).resolves.toBe('none');
+    expect(FakeSensor.made[0].stopped).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(add.mock.calls.filter(([t]) => String(t) === 'deviceorientation')).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it('aborted while deviceorientation waits: its listener is removed and no timer is left', async () => {
+    withoutSensor();
+    vi.useFakeTimers();
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const abort = new AbortController();
+    const p = probeTilt(TILT.firstSampleMs, abort.signal);
+    await vi.advanceTimersByTimeAsync(10);
+    abort.abort();
+    await expect(p).resolves.toBe('none');
+    expect(remove.mock.calls.filter(([t]) => String(t) === 'deviceorientation')).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('already aborted: nothing is opened', async () => {
+    withSensor();
+    const abort = new AbortController();
+    abort.abort();
+    await expect(probeTilt(TILT.firstSampleMs, abort.signal)).resolves.toBe('none');
+    expect(FakeSensor.made).toHaveLength(0);
+  });
+
+  it('a sample that lands after an abort does not turn the answer into "sensor"', async () => {
+    withSensor();
+    const abort = new AbortController();
+    const p = probeTilt(TILT.firstSampleMs, abort.signal);
+    await vi.waitFor(() => expect(FakeSensor.made).toHaveLength(1));
+    abort.abort();
+    FakeSensor.made[0].read(ID);
+    await expect(p).resolves.toBe('none');
+  });
 });
 
 describe('askTilt: iOS\'s permission, asked synchronously in the click', () => {

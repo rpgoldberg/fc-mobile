@@ -36,7 +36,16 @@ export function NavOrb({ tilt }: { tilt: TiltDrive }) {
   useEffect(() => {
     if (useTiltStore.getState().support !== 'unknown') return;
     useTiltStore.setState({ support: 'probing' });
-    void probeTilt().then((found) => useTiltStore.setState({ support: found }));
+    const abort = new AbortController();
+    void probeTilt(undefined, abort.signal).then((found) => {
+      if (!abort.signal.aborted) useTiltStore.setState({ support: found });
+    });
+    // the orb going while the probe runs: its timer and listeners go with it, and a later orb probes again
+    return () => {
+      if (useTiltStore.getState().support !== 'probing') return;
+      abort.abort();
+      useTiltStore.setState({ support: 'unknown' });
+    };
   }, []);
 
   const kind = support === 'sensor' || support === 'event' ? support : null;

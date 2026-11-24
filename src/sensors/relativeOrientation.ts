@@ -157,16 +157,19 @@ async function sensorAllowed(): Promise<boolean> {
 }
 
 /** Open `kind` until its first real sample or `ms`, then stop it: whether one came. */
-function firstSample(kind: TiltKind, ms: number): Promise<boolean> {
+function firstSample(kind: TiltKind, ms: number, signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
+    if (signal?.aborted) return resolve(false);
     let src: TiltSource | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const done = (ok: boolean) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
       src?.stop();
       src = null;
       resolve(ok);
     };
+    const cancel = () => done(false);
     try {
       src = openTilt(kind, () => done(true), () => done(false));
     } catch {
@@ -174,6 +177,7 @@ function firstSample(kind: TiltKind, ms: number): Promise<boolean> {
       return;
     }
     timer = setTimeout(() => done(false), ms);
+    signal?.addEventListener('abort', cancel, { once: true });
   });
 }
 
@@ -184,11 +188,12 @@ export type TiltProbe = TiltKind | 'ask' | 'none';
  * click), else the first of the sensor and deviceorientation to give a real sample within `ms` each, else none.
  * Whatever it opened is stopped before it resolves.
  */
-export async function probeTilt(ms: number = TILT.firstSampleMs): Promise<TiltProbe> {
+export async function probeTilt(ms: number = TILT.firstSampleMs, signal?: AbortSignal): Promise<TiltProbe> {
   const event = eventCtor();
   if (typeof event?.requestPermission === 'function') return 'ask';
-  if (sensorCtor() && (await sensorAllowed()) && (await firstSample('sensor', ms))) return 'sensor';
-  if (event && (await firstSample('event', ms))) return 'event';
+  if (sensorCtor() && (await sensorAllowed()) && (await firstSample('sensor', ms, signal)) && !signal?.aborted) return 'sensor';
+  if (signal?.aborted) return 'none';
+  if (event && (await firstSample('event', ms, signal)) && !signal?.aborted) return 'event';
   return 'none';
 }
 

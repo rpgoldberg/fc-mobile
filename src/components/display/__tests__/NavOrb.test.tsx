@@ -58,6 +58,43 @@ describe('(a) no sensor: no orb, and the rest of the controls as ever', () => {
     expect(probeTilt).not.toHaveBeenCalled();
   });
 
+  it('the orb goes while the probe runs: the probe is aborted and the store goes back to unknown, so a later orb probes again', async () => {
+    let signal: AbortSignal | undefined;
+    probeTilt.mockImplementation((_ms, s) => {
+      signal = s;
+      return new Promise(() => {});
+    });
+    const { unmount } = render(<FloatingNav />);
+    offer(jogOf(tiltDrive()));
+    await flush();
+    expect(useTiltStore.getState().support).toBe('probing');
+    expect(signal?.aborted).toBe(false);
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    expect(useTiltStore.getState().support).toBe('unknown');
+  });
+
+  it('the probe answers after the orb went: the store is not written', async () => {
+    let answer: (v: 'sensor') => void = () => {};
+    probeTilt.mockImplementation(() => new Promise((r) => (answer = r)));
+    const { unmount } = render(<FloatingNav />);
+    offer(jogOf(tiltDrive()));
+    await flush();
+    unmount();
+    answer('sensor');
+    await flush();
+    expect(useTiltStore.getState().support).toBe('unknown');
+  });
+
+  it('the orb goes after the probe answered: the answer is kept', async () => {
+    probeTilt.mockResolvedValue('event');
+    const { unmount } = render(<FloatingNav />);
+    offer(jogOf(tiltDrive()));
+    await flush();
+    unmount();
+    expect(useTiltStore.getState().support).toBe('event');
+  });
+
   it('probed once a session: shown again (a card closed, the case back) it is not probed again', async () => {
     probeTilt.mockResolvedValue('event');
     const { unmount } = render(<FloatingNav />);
