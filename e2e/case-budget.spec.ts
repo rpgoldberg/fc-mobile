@@ -2,7 +2,8 @@ import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { CASE_VIEWPORTS, FOLD8_DPR } from './caseViewports';
 import { goToFirstFigure } from './goTo';
-import { boxCorners, project, unprojectToPlaneZ, type Camera, type Vec3 } from '../src/components/display/caseCamera';
+import { wallCover } from './wallCover';
+import { project, unprojectToPlaneZ, type Camera, type Vec3 } from '../src/components/display/caseCamera';
 import { wallLayout } from '../src/components/display/packCabinets';
 import { cabinetBox, type Box } from '../src/components/display/caseFraming';
 import { wallPatternProfiles } from '../src/components/display/casePrefs';
@@ -361,28 +362,6 @@ function fill(scene: Awaited<ReturnType<typeof drawn>>) {
   };
 }
 
-/**
- * Ruling 33: the widest stretch (px) of the frame where the wall stands, from where its camera and pan put the wall's
- * two ends (the published boxes, any wall), that no drawn cabinet covers as the browser draws it; and the narrowest
- * drawn cabinet.
- */
-function wallCover(scene: Awaited<ReturnType<typeof drawn>>) {
-  const c = scene.camera;
-  const camera: Camera = { x: c.x, y: c.y, z: c.z, pitch: c.pitch, focalPx: c.focalPx, frame: { width: c.width, height: c.height } };
-  const xs = (b: number[]) => boxCorners(b[0], b[1], 0, b[2], b[3], b[4]).map((p) => project(camera, p).x + scene.pan);
-  const lo = Math.max(0, Math.min(...xs(scene.wall[0])));
-  const hi = Math.min(camera.frame.width, Math.max(...xs(scene.wall[scene.wall.length - 1])));
-  const spans = scene.spans.map((s) => [Math.max(lo, s.x0), Math.min(hi, s.x1)] as const).filter(([a, b]) => b > a);
-  spans.sort((a, b) => a[0] - b[0]);
-  let reach = lo;
-  let blank = 0;
-  for (const [a, b] of spans) {
-    blank = Math.max(blank, a - reach);
-    reach = Math.max(reach, b);
-  }
-  return { blank: Math.max(blank, hi - reach), narrowest: Math.min(...scene.spans.map((s) => s.x1 - s.x0)) };
-}
-
 /** Open the case at `size` in fixture mode, swipe it into `state`, and let it settle: what it draws, against its frame. */
 async function settled(page: Page, size: { width: number; height: number }, state: State, wall: Wall = SPARSE) {
   await page.addInitScript((prefs) => {
@@ -644,7 +623,7 @@ for (const size of CASE_VIEWPORTS.filter((v) => v.name.startsWith('fold8'))) {
       await swipe(page, dx);
       // every swipe walks: one lost would change the walk (all four in lost, the swipe back walked past the wall's start)
       const from = x;
-      await expect.poll(cameraX, { message: `${at}: the camera walked ${dx < 0 ? 'on' : 'back'} from ${from}` })[dx < 0 ? 'toBeGreaterThan' : 'toBeLessThan'](from);
+      await expect.poll(cameraX, { message: `${at}: the camera did not walk ${dx < 0 ? 'on' : 'back'} from ${from}` })[dx < 0 ? 'toBeGreaterThan' : 'toBeLessThan'](from);
       await page.waitForTimeout(200);
       x = await cameraX();
       const placed = await host.evaluate((h) => {
